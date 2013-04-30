@@ -9,10 +9,14 @@
 #define SERVOUNDERPIN 2
 #define SERVOOVERPIN 3
 
-// Address in EEPROM to store the distance between the gripper pads.
+/* Address in EEPROM to store the distance between the gripper pads. */
 const int gripStartAddress = 100;
+/* Address in EEPROM to store current height. */
+const int heightStartAddress = 102;
+/* Array with the 3 different servo angles for standby position */
+char standbyAngles[3] = {0,90,0};
 
-// Create a servo object for the three different servos on the arm.
+/* Create a servo object for the three different servos on the arm. */
 Servo gripperRot, underArmRot, overArmRot;
 Servo servos[3] = {gripperRot, underArmRot, overArmRot};
 
@@ -21,7 +25,13 @@ Servo servos[3] = {gripperRot, underArmRot, overArmRot};
   Every step the stepper takes is 7.5 degrees, the gears have a ratio of 12/30 and the threaded rod got a M6 thread. 
   Distance moved = 2 * (steps*(15/720)/(12/30)) * 0,001 = steps/60000 [m]
 */
-int gripperDist; 
+int gripperDist;
+/*
+  Variable that holds the current height of the arm. The motor that controlls the height is an ordinary DC-motor but 
+  with an encoder with 4 fields attached to the threaded rod. The rod has a pitch of 4 mm/rev. 
+  (or maybe we attach the encoder to another part of the elevation gears...)  
+*/
+int currentHeight;
 
 // Variables for the servo angles.
 char gripperAng, underArmAng, overArmAng;
@@ -43,10 +53,15 @@ void setup() {
   gripperDist = EEPROM_readInt(gripStartAddress);
   
   /* Check if an error has occured and the gripper spacing is unknown, if so calibrate! */
-  if (gripperDist == 1337){             
+  if (gripperDist == 0xFFFF){             
     //calibrateGripper();
   }
   
+  /* Fetch current arm height from EEPROM and check if it is valid */
+  currentHeight = EEPROM_readInt(heightStartAddress);
+  if (currentHeight == 0xFFFF) {
+    //calibrateHeight();
+  }  
 } 
  
 void loop() 
@@ -56,7 +71,7 @@ void loop()
     Serial1.readBytesUntil('\n',buffer,4);
     switch(buffer[0]){
       case 'f':
-        // Execute the function with the functioncode buffer[1].
+        // Execute the function with the opcode in buffer[1].
         operate(buffer[1]);
         break;
       case 's':
@@ -72,16 +87,22 @@ void loop()
 void operate(char opcode) {
   switch(opcode){
     case 0:
-      // Load the carparts from the table.
+      /* Load the carparts from the table. */
       break;
     case 1:
-      // Unload the carparts from the AGV
+      /* Unload the carparts from the AGV */
       break;
     case 2:
-      // Enter transport mode (the arm positioned to take as lite place as possible)
-      char angles[3] = {0,90,0};
-      moveServos(servos, angles);
+      /* Enter transport mode (the arm positioned to take as lite place as possible) */
+      moveServos(servos, standbyAngles);
+      /* Set gripping width to 155 mm */
       gripperGrip(155);
+      break;
+    case 3:
+      /* Calibrate gripper */
+      break;
+    case 4:
+      /* Calibrate the heightsensor/encoder */
       break;
   }
 }
@@ -97,19 +118,43 @@ void moveServos(Servo servo[3], char angle[3]) {
 
 void modifyAltitude(int desiredHeight) {
   
+  /* Write 0xFFFF to currentHeights EEPROM address so that incase of a power failure when moving up or down we will know that we are in an unknown state. */
+  EEPROM_writeInt(heightStartAddress, 0xFFFF);
+  
+  /* Loop while we need to move */
+  while(desiredHeight != currentHeight) {
+    
+    /* Going up */
+    if(desiredHeight > currentHeight){
+      // set motor to go UP
+      // read encoder
+      // increase currentHeight   
+    } 
+    /* Going down */
+    else {
+      // set motor to go DOWN
+      // read encoder
+      // decrease currentHeight
+    }
+  }
+  
+  /* Write the currentHeight to EEPROM for reusage after powerloop */
+  EEPROM_writeInt(heightStartAddress, currentHeight);
 }
 
-/* Function that open/closes the gripper to the desired spacing given as the input 
- * argument desiredGripDist [mm] */
+/* 
+ * Function that open/closes the gripper to the desired spacing given as the input 
+ * argument desiredGripDist [mm] 
+ */
 void gripperGrip(int desiredGripDist) {
   
-  // Write 1337 to EEPROM so that we can check if we actually know how far appart the pads are at setup.
-  EEPROM_writeInt(gripStartAddress, 1337);       
+  /* Write 0xFFFF to EEPROM so that we can check if we actually know how far appart the pads are at setup. */
+  EEPROM_writeInt(gripStartAddress, 0xFFFF);       
   
-  // Calculate how many steps the stepper has to take to get to the new position
+  /* Calculate how many steps the stepper has to take to get to the new position */
   int stepsToTake = (gripperDist-desiredGripDist) * 60;
   
-  // If negative number of steps the spacing should incerased and vice versa
+  /* If negative number of steps the spacing should incerased and vice versa */
   if(stepsToTake < 0 ) { 
     // Set rotation to CCW    
     digitalWrite(STEPPERdirPIN, LOW);      
@@ -146,13 +191,18 @@ void gripperGrip(int desiredGripDist) {
   EEPROM_writeInt(gripStartAddress, desiredGripDist);
 }
  
-  
+/*
+  Function for writing a int to EEPROM.
+*/
 void EEPROM_writeInt(int address, int value){
    byte high = (byte)((value & 0xFF00) >> 8);
    byte low = (byte)(value & 0x00FF);
    EEPROM.write(address++, high);
    EEPROM.write(address, low);
 }
+/*
+  Function for reading a int from EEPROM.
+*/
 int EEPROM_readInt(int address){
    int high = ((int) EEPROM.read(address++)) << 8;
    int low = (int) EEPROM.read(address);
