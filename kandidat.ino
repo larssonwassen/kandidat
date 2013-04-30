@@ -14,6 +14,7 @@ const int gripStartAddress = 100;
 
 // Create a servo object for the three different servos on the arm.
 Servo gripperRot, underArmRot, overArmRot;
+Servo servos[3] = {gripperRot, underArmRot, overArmRot};
 
 /* 
   Variable that holds the current distance between the gripper pads in mm. 
@@ -23,7 +24,7 @@ Servo gripperRot, underArmRot, overArmRot;
 int gripperDist; 
 
 // Variables for the servo angles.
-int gripperAng, underArmAng, overArmAng;
+char gripperAng, underArmAng, overArmAng;
  
 void setup() { 
     
@@ -56,16 +57,47 @@ void loop()
     switch(buffer[0]){
       case 'f':
         // Execute the function with the functioncode buffer[1].
-        // operate(buffer[1]);
+        operate(buffer[1]);
         break;
       case 's':
         // Shut down.
         break;
     }
   }
-  gripperRot.write(1);                  // sets the servo position according to the scaled value 
   delay(15);                           // waits for the servo to get there 
 } 
+/*
+ * Function that takes an operation code and there after performes that operation.
+ */
+void operate(char opcode) {
+  switch(opcode){
+    case 0:
+      // Load the carparts from the table.
+      break;
+    case 1:
+      // Unload the carparts from the AGV
+      break;
+    case 2:
+      // Enter transport mode (the arm positioned to take as lite place as possible)
+      char angles[3] = {0,90,0};
+      moveServos(servos, angles);
+      gripperGrip(155);
+      break;
+  }
+}
+/* 
+ * Function for moving all three servos "at the same time" 
+*/
+void moveServos(Servo servo[3], char angle[3]) {
+  char i;
+  for(i = 0; i < 3; i++){
+    servo[i].write(angle[i]);
+  }
+}
+
+void modifyAltitude(int desiredHeight) {
+  
+}
 
 /* Function that open/closes the gripper to the desired spacing given as the input 
  * argument desiredGripDist [mm] */
