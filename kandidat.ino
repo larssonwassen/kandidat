@@ -5,9 +5,9 @@
 #define STEPPERstepPIN 14
 #define STEPPERdirPIN  15
 #define SERIALbaud  9600
-#define SERVOGRIPPERPIN 1
-#define SERVOUNDERPIN 2
-#define SERVOOVERPIN 3
+#define SERVOGRIPPERPIN 11
+#define SERVOUNDERPIN 12
+#define SERVOOVERPIN 13
 
 /* Address in EEPROM to store the distance between the gripper pads. */
 const int gripStartAddress = 100;
@@ -39,11 +39,9 @@ char gripperAng, underArmAng, overArmAng;
 void setup() { 
     
   /* Start a serialconnection with specified baudrate and 8 data bits, no parity and 1 stop bit. */
-  Serial1.begin(SERIALbaud, SERIAL_8N1);
-  
+  Serial.begin(SERIALbaud, SERIAL_8N1);
   /* Say hello. */
-  Serial1.println("Serial up and running!");
-  
+  Serial.println("Serial up and running!");
   /* Attach the servos to the pins on the Mega */
   gripperRot.attach(SERVOGRIPPERPIN);
   underArmRot.attach(SERVOUNDERPIN);
@@ -66,19 +64,24 @@ void setup() {
  
 void loop() 
 { 
-  if (Serial1.available() >= 4) {
+  
+  if (Serial.available() >= 4) {
+    Serial.println("I got some data");
     char buffer[4];
-    Serial1.readBytesUntil('\n',buffer,4);
+    Serial.readBytesUntil('\n',buffer,4);
     switch(buffer[0]){
       case 'f':
+      Serial.println("it was a f");
         // Execute the function with the opcode in buffer[1].
         operate(buffer[1]);
         break;
       case 's':
+      Serial.println("it was a s");
         // Shut down.
         break;
     }
   }
+ 
   delay(15);                           // waits for the servo to get there 
 } 
 /*
@@ -86,22 +89,32 @@ void loop()
  */
 void operate(char opcode) {
   switch(opcode){
-    case 0:
+    case '0':
+    servos[1].write(0);
+    Serial.println("opcode 0");
       /* Load the carparts from the table. */
       break;
-    case 1:
+    case '1':
+    Serial.println("opcode 1");
+    servos[1].write(180);
       /* Unload the carparts from the AGV */
       break;
-    case 2:
+    case '2':
+    Serial.println("opcode 2");
       /* Enter transport mode (the arm positioned to take as lite place as possible) */
-      moveServos(servos, standbyAngles);
+      //moveServos(servos, standbyAngles);
       /* Set gripping width to 155 mm */
-      gripperGrip(155);
+      //gripperGrip(155);
+      servos[0].write(0);
       break;
-    case 3:
+    case '3':
+    Serial.println("opcode 3");
       /* Calibrate gripper */
+      servos[0].write(90);
       break;
-    case 4:
+    case '4':
+    Serial.println("opcode 4");
+    servos[0].write(180);
       /* Calibrate the heightsensor/encoder */
       break;
   }
