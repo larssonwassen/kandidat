@@ -21,11 +21,12 @@ const int gripStartAddress = 100;
 const int heightStartAddress = 102;
 
 /* Array with the 3 different servo angles for standby position */
-unsigned char standbyAngles[3] = {0,90,13};
+unsigned char standbyAngles[3] = {4,90,15};
 
 /* Angles for different loading routines */
-unsigned char angles0[3] = {55, 50, 13};
-unsigned char angles1[3] = {90, 107, 150};
+unsigned char angles0[3] = {0, 150, 30};
+unsigned char angles1[3] = {94, 105, 145};
+unsigned char angles2[3] = {180, 50, 130};
 unsigned char currentAngles[3];
 
 /* Create a servo object for the three different servos on the arm. */
@@ -40,8 +41,8 @@ Servo servos[3] = {gripperRot, underArmRot, overArmRot};
 byte gripperDist = 206;
 /*
  * Variable that holds the current height of the arm. The motor that controlls the height is an ordinary DC-motor but 
- * with an encoder with 8 fields attached to the threaded rod. The rod has a pitch of 4 mm/rev. 
- * (or maybe we attach the encoder to another part of the elevation gears...)  
+ * with an encoder with 8 fields attached to the motor shaft. The rod has a pitch of 3 mm/rev. And the motor has a gearbox
+ * with the ratio 50:1. When measured, the ecoder changes value 138 times/mm in eevation change. 
  */
 byte currentHeight = 119;
 char blackOrWhite = 0;
@@ -139,41 +140,36 @@ void loop() {
 void operate(char opcode) {
   switch(opcode){
     case '0':
-      debug_print("Opcode 0.");
-      /* Load the carparts from the table. */
-      //gripperGrip(200);
-      //modifyAltitude(300);      
+      debug_print("Opcode 0.");      
+      /* Load the carparts from the table. */     
       moveServos(servos, angles0);
       break;
     case '1':
-      Serial.println("Opcode 1.");
-      /* Unload the carparts from the AGV */
-      //gripperGrip(200);
-      //modifyAltitude(300);      
+      Serial.println("Opcode 1.");      
+      /* Unload the car from the AGV */     
       moveServos(servos, angles1);      
       break;
     case '2':
-      debug_print("Opcode 2.");
+      debug_print("Opcode 2.");      
       /* Enter transport mode (the arm positioned to take as lite place as possible) */
       moveServos(servos, standbyAngles);
       break;
     case '3':
-      debug_print("Opcode 3.");
-      /* Calibrate gripper */      
-      gripperGrip(193);
-      //modifyAltitude(150);
+      debug_print("Opcode 3.");      
+      /* Calibrate gripper */
+       moveServos(servos, angles2);
       break;
     case '4':
       debug_print("Opcode 4.");
-      /* Calibrate the heightsensor/encoder */
-      gripperGrip(205);
-     //modifyAltitude(200);
+      /* Calibrate the heightsensor/encoder and gripper */
+      //calibrateGripper();
+      //calibrateHeight();
       break;
   }
 }
 /* 
  * Function for moving all three servos "at the same time" 
-*/
+ */
 void moveServos(Servo servo[3], unsigned char angle[3]) {
   char i;
   unsigned char newAngle;
@@ -182,17 +178,15 @@ void moveServos(Servo servo[3], unsigned char angle[3]) {
     deltaAngle = currentAngles[i] - angle[i];
     while (deltaAngle > 0){
       newAngle = currentAngles[i]-1;
-      debug_print(newAngle);
       servo[i].write(newAngle);
-      delay(30);
+      delay(25);
       currentAngles[i] = newAngle;
       deltaAngle = currentAngles[i] - angle[i];
     }
     while (deltaAngle < 0){
       newAngle = currentAngles[i]+1;
-      debug_print(newAngle);
       servo[i].write(newAngle);
-      delay(30);
+      delay(25);
       currentAngles[i] = newAngle;
       deltaAngle = currentAngles[i] - angle[i];
     }
@@ -200,11 +194,10 @@ void moveServos(Servo servo[3], unsigned char angle[3]) {
 }
 /*
  * Function for changing the height of the arm. A PID-regulator or atleast PI.regulator should be implemented here.
- * 43,175 encodersteps/mm 
-*/ 
+ * 137 encodersteps/mm 
+ */ 
 void modifyAltitude(int desiredHeight) {
-  debug_print(currentHeight);
-  
+  debug_print(currentHeight);  
   
   /* Write 0xFF to currentHeights EEPROM address so that incase of a power failure when moving up or down we will know that we are in an unknown state. */
   EEPROM.write(heightStartAddress, 0xFF);
@@ -222,40 +215,32 @@ void modifyAltitude(int desiredHeight) {
   if(heightDelta < 0){
     debug_print("Up");
     
-    /* The arm changes 1 mm in height every 43 encoderStep, the height delta is negative so change its sign with -43. */
+    /* The arm changes 1 mm in height every 137 encoderStep, the height delta is negative so change its sign with -43. */
     stepsToTake = heightDelta * (-137);
     
     /* Full speed (DEC 1) Up */
     Serial1.write(0x01);
     debug_print(stepsToTake);
-    
-    /* Until we have reached the desired position, read the encoder and look for a change. */ 
-    while(stepsTaken!=stepsToTake){     
-      blackOrWhite = digitalRead(ENCODERPIN);
-      if(oldBlackOrWhite != blackOrWhite){
-        stepsTaken++;
-        oldBlackOrWhite = blackOrWhite; 
-      }
-    }  
+      
   } /* Going down */
   else if (heightDelta > 0) {
     debug_print("Down");
     
-    /* The arm changes 1 mm in height every 43 encoderStep. */
+    /* The arm changes 1 mm in height every 137 encoderStep. */
     stepsToTake = heightDelta * 137;
     
     /* Full speed (DEC 127) down */
     Serial1.write(0x7F); 
     debug_print(stepsToTake);
     
-    /* Until we have reached the desired position, read the encoder and look for a change. */
-    while(stepsTaken != stepsToTake){     
+  }
+  /* Until we have reached the desired position, read the encoder and look for a change. */
+  while(stepsTaken!=stepsToTake){     
       blackOrWhite = digitalRead(ENCODERPIN);
       if(oldBlackOrWhite != blackOrWhite){
         stepsTaken++;
         oldBlackOrWhite = blackOrWhite; 
       }
-    }
   }
   /* Write 64 (DEC) to the Sabertooth to stop the elevation motor */
   Serial1.write(0x40); 
